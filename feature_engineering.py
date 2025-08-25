@@ -206,113 +206,62 @@ def engineer_credit_features(df, customer_id_col='customer_id', date_col=None):
 import numpy as np
 import pandas as pd
 
-def fico_risk_tier(fico_score):
-    """Categorical risk segmentation based on industry standards"""
-    return np.select([
+def engineer_fico_features(df, fico_column='fico_credit_score'):
+    """
+    Generate comprehensive FICO-derived features from input dataframe
+    
+    Args:
+        df: Input pandas DataFrame
+        fico_column: Name of FICO score column (default: 'fico_credit_score')
+    
+    Returns:
+        DataFrame with original columns plus engineered FICO features
+    """
+    result_df = df.copy()
+    fico_score = df[fico_column].fillna(300)  # Handle missing values
+    
+    # Risk tier segmentation
+    result_df['fico_tier'] = np.select([
         fico_score >= 800, fico_score >= 740, fico_score >= 670,
         fico_score >= 580, fico_score >= 300
     ], ['exceptional', 'very_good', 'good', 'fair', 'poor'], default='invalid')
-
-def fico_distance_from_thresholds(fico_score):
-    """Distance from critical lending thresholds"""
-    thresholds = [580, 620, 670, 720, 750, 800]
-    return {f'fico_distance_from_{t}': fico_score - t for t in thresholds}
-
-def fico_percentile_position(fico_score):
-    """Approximate population percentile (0-100)"""
-    return np.clip((fico_score - 300) / 550 * 100, 0, 100)
-
-def fico_credit_worthiness_score(fico_score):
-    """Non-linear transformation emphasizing score ranges"""
-    normalized = (fico_score - 300) / 550
-    return normalized ** 0.7  # Emphasizes higher scores more
-
-def fico_risk_probability(fico_score):
-    """Estimated default probability based on industry data"""
-    return np.where(fico_score >= 300, 
-                   np.exp(-0.015 * (fico_score - 300)), 1.0)
-
-def fico_lending_approval_likelihood(fico_score):
-    """Sigmoid function for approval probability"""
-    return 1 / (1 + np.exp(-0.02 * (fico_score - 650)))
-
-def fico_score_stability_indicator(fico_score):
-    """Score volatility indicator (higher = more stable)"""
-    return np.where(fico_score >= 700, 1.0,
-           np.where(fico_score >= 600, 0.7, 
-           np.where(fico_score >= 500, 0.4, 0.1)))
-
-def fico_prime_subprime_boundary(fico_score):
-    """Distance from 620 prime/subprime boundary"""
-    return fico_score - 620
-
-def fico_log_odds_default(fico_score):
-    """Log odds of default (linear in logistic regression)"""
-    return -0.025 * fico_score + 15
-
-def fico_binned_features(fico_score):
-    """Multiple binning strategies for different granularities"""
-    return {
-        'fico_decile': np.digitize(fico_score, np.linspace(300, 850, 11)) - 1,
-        'fico_quintile': np.digitize(fico_score, np.linspace(300, 850, 6)) - 1,
-        'fico_50_bins': np.digitize(fico_score, np.linspace(300, 850, 51)) - 1
-    }
-
-def fico_interaction_readiness(fico_score):
-    """Features designed for interaction with other variables"""
-    return {
-        'fico_squared': fico_score ** 2,
-        'fico_cubed': fico_score ** 3,
-        'log_fico': np.log(np.maximum(fico_score, 1)),
-        'sqrt_fico': np.sqrt(np.maximum(fico_score, 0)),
-        'inverse_fico': 1 / np.maximum(fico_score, 1)
-    }
-
-def fico_regime_indicators(fico_score):
-    """Binary indicators for specific score regimes"""
-    return {
-        'is_super_prime': (fico_score >= 780).astype(int),
-        'is_prime': ((fico_score >= 660) & (fico_score < 780)).astype(int),
-        'is_near_prime': ((fico_score >= 620) & (fico_score < 660)).astype(int),
-        'is_subprime': ((fico_score >= 580) & (fico_score < 620)).astype(int),
-        'is_deep_subprime': (fico_score < 580).astype(int)
-    }
-
-def fico_standardized_score(fico_score):
-    """Z-score normalization (mean=0, std=1)"""
-    return (fico_score - 690) / 65  # Approximate US population stats
-
-def fico_premium_discount_factor(fico_score):
-    """Interest rate adjustment factor based on score"""
-    base_rate = 0.10
-    return base_rate * np.exp(-0.008 * (fico_score - 500))
-
-def comprehensive_fico_features(fico_score):
-    """Generate all FICO-derived features at once"""
-    features = {}
     
     # Core transformations
-    features['fico_tier'] = fico_risk_tier(fico_score)
-    features['fico_percentile'] = fico_percentile_position(fico_score)
-    features['fico_creditworthiness'] = fico_credit_worthiness_score(fico_score)
-    features['fico_default_probability'] = fico_risk_probability(fico_score)
-    features['fico_approval_likelihood'] = fico_lending_approval_likelihood(fico_score)
-    features['fico_stability'] = fico_score_stability_indicator(fico_score)
-    features['fico_prime_distance'] = fico_prime_subprime_boundary(fico_score)
-    features['fico_log_odds'] = fico_log_odds_default(fico_score)
-    features['fico_standardized'] = fico_standardized_score(fico_score)
-    features['fico_rate_factor'] = fico_premium_discount_factor(fico_score)
+    result_df['fico_percentile'] = np.clip((fico_score - 300) / 550 * 100, 0, 100)
+    result_df['fico_creditworthiness'] = ((fico_score - 300) / 550) ** 0.7
+    result_df['fico_default_probability'] = np.where(fico_score >= 300, 
+                                                   np.exp(-0.015 * (fico_score - 300)), 1.0)
+    result_df['fico_approval_likelihood'] = 1 / (1 + np.exp(-0.02 * (fico_score - 650)))
+    result_df['fico_stability'] = np.where(fico_score >= 700, 1.0,
+                                 np.where(fico_score >= 600, 0.7, 
+                                 np.where(fico_score >= 500, 0.4, 0.1)))
+    result_df['fico_prime_distance'] = fico_score - 620
+    result_df['fico_log_odds'] = -0.025 * fico_score + 15
+    result_df['fico_standardized'] = (fico_score - 690) / 65
+    result_df['fico_rate_factor'] = 0.10 * np.exp(-0.008 * (fico_score - 500))
     
-    # Distance features
-    features.update(fico_distance_from_thresholds(fico_score))
+    # Distance from critical thresholds
+    thresholds = [580, 620, 670, 720, 750, 800]
+    for threshold in thresholds:
+        result_df[f'fico_distance_from_{threshold}'] = fico_score - threshold
     
-    # Binned features
-    features.update(fico_binned_features(fico_score))
+    # Binning strategies
+    result_df['fico_decile'] = np.digitize(fico_score, np.linspace(300, 850, 11)) - 1
+    result_df['fico_quintile'] = np.digitize(fico_score, np.linspace(300, 850, 6)) - 1
+    result_df['fico_50_bins'] = np.digitize(fico_score, np.linspace(300, 850, 51)) - 1
     
-    # Interaction features
-    features.update(fico_interaction_readiness(fico_score))
+    # Mathematical transformations for interactions
+    result_df['fico_squared'] = fico_score ** 2
+    result_df['fico_cubed'] = fico_score ** 3
+    result_df['log_fico'] = np.log(np.maximum(fico_score, 1))
+    result_df['sqrt_fico'] = np.sqrt(np.maximum(fico_score, 0))
+    result_df['inverse_fico'] = 1 / np.maximum(fico_score, 1)
     
-    # Regime indicators
-    features.update(fico_regime_indicators(fico_score))
+    # Risk regime binary indicators
+    result_df['is_super_prime'] = (fico_score >= 780).astype(int)
+    result_df['is_prime'] = ((fico_score >= 660) & (fico_score < 780)).astype(int)
+    result_df['is_near_prime'] = ((fico_score >= 620) & (fico_score < 660)).astype(int)
+    result_df['is_subprime'] = ((fico_score >= 580) & (fico_score < 620)).astype(int)
+    result_df['is_deep_subprime'] = (fico_score < 580).astype(int)
     
-    return features
+    return result_df
